@@ -16,6 +16,9 @@ interface ICommand {
     text: string;
     start: number;
     end: number;
+    fontColor: string;
+    fontSize: number;
+    visible: boolean;
 }
 
 class Command implements ICommand{
@@ -29,6 +32,9 @@ class Command implements ICommand{
     text: string;
     start: number;
     end: number;
+    fontColor: string;
+    fontSize: number;
+    visible: boolean;
 
     constructor(options: any) {
         this.id=options.id;
@@ -41,6 +47,9 @@ class Command implements ICommand{
         this.text=options.text;
         this.start=options.start;
         this.end=options.end;
+        this.fontColor=options.fontColor;
+        this.fontSize=options.fontSize;
+        this.visible='visible' in options? options.visible : true;
     }
 }
 
@@ -65,11 +74,16 @@ let score=new Command({
 ui.push(score);
 var tickId=0;
 var canvas : HTMLCanvasElement;
-var interval = 50;
-var running = true;
+var interval = 40;
+var step = 10;
+var running = false;
+var basey=740;
 
 
 function drawItem(ctx:CanvasRenderingContext2D,item: Command, unit: number){
+    if (!item.visible){
+        return;
+    }
     if (item.fill){
         ctx.fillStyle=item.fill;
     }
@@ -82,8 +96,6 @@ function drawItem(ctx:CanvasRenderingContext2D,item: Command, unit: number){
     var h=item.h?item.h*unit:0;
     var start=item.start?item.start:0;
     var end=item.end?item.end:2*Math.PI;
-    var fh=Math.round(30*unit);
-    ctx.font=fh+"px Arial";
 
     if (item.id==="rect" && item.fill){
         ctx.fillRect(x,y,w,h);
@@ -102,13 +114,16 @@ function drawItem(ctx:CanvasRenderingContext2D,item: Command, unit: number){
         }
     }
     if (item.text){
+        var fh=Math.round((item.fontSize?item.fontSize*unit:30*unit));
+        ctx.font=fh+"px Arial";
         ctx.textAlign = "center";
-        if (item.border){
-            ctx.fillStyle =item.border;
+        if (item.border || item.fontColor){
+            ctx.fillStyle =item.fontColor ? item.fontColor : item.border;
         }
         ctx.fillText(item.text,x+w/2,y+h/2+fh/3,w);
     }
 }
+
 function repaint(){
     if (canvas){
         const unit = getViewport()[2];
@@ -139,8 +154,15 @@ function getViewport(){
     }else{
         h=w/ratio;
     }
+    var pixelRatio=1;
+    if (window.devicePixelRatio && window.devicePixelRatio>1){
+        w*=window.devicePixelRatio;
+        h*=window.devicePixelRatio; 
+        pixelRatio=window.devicePixelRatio; 
+        console.log(pixelRatio);
+    }
     unit=w/1000;
-    return [w,h,unit];
+    return [w,h,unit,pixelRatio];
 }
 
 function handleClick(ev: MouseEvent){
@@ -164,12 +186,12 @@ function handleTouch(ev: TouchEvent){
 }
 
 function  clickCanvas(nx:number,ny: number){
-    console.log(points);
+    console.log(line,points);
     if (line>0 && running){
         var bar =points[line]; 
         var bar0 = points[line-1];
         var bw = (bar.w?bar.w:0);
-        if (line>1){
+        if (line>0){
             if (bar0){
                 const newX0=Math.max(bar.x,points[line-1].x);
                 const newX1=Math.min(bar.x+bw,points[line-1].x+(bar0.w?bar0.w:0));
@@ -178,6 +200,7 @@ function  clickCanvas(nx:number,ny: number){
                 bar.x=newX0;
                 bar.w=newWidth;   
                 bar.text=""+newWidth;
+                bar.fontSize=Math.min(30,Math.max(newWidth/10,12));
                 score.text+=newWidth; 
             }
         }else{
@@ -188,7 +211,9 @@ function  clickCanvas(nx:number,ny: number){
                 bar.x=newX0;
                 bar.w=newWidth;   
                 bar.text=""+newWidth; 
+                bar.fontSize=Math.min(newWidth/8,5);
                 score.text+=newWidth;
+                
             }
         }
         console.log(points[line].x);
@@ -211,27 +236,18 @@ function tick(){
                 running = false;
                 return;
             }
-            if ((750-py)<barHeight){
+            if ((basey-py)<barHeight){
+                running = false;
                 setTimeout(function(){
-                    points.splice(0,points.length);
-                    line=0;
-                    barWidth=500;
-                    barHeight-=1;
-                    interval-=5;
-                    direction=1;
-                    repaint();
-                    if (tickId){
-                        window.clearTimeout(tickId);
-                    }
-                    tickId=window.setTimeout(tick,50);
+                    startStage();
                 },3000);
                 return;
             }
         }
-        var px=-direction*pw;
-        points.push(new Command({id: "rect", x: px, y:750-py, w:pw, h:barHeight, fill: "#FF0", border: "#F00"}))    
-    }else if(line>=0){
-        points[line].x+=direction*10;
+        var px=0;
+        points.push(new Command({id: "rect", x: px, y:basey-py, w:pw, h:barHeight, fill: "#FF0", border: "#DD0", fontColor:"#800"}))    
+    }else if(line>0){
+        points[line].x+=direction*step;
         if (points[line].x+points[line].w>1000){
             direction=-1;
         }
@@ -247,6 +263,24 @@ function tick(){
 }    
 
 
+function startStage(){
+    line=0;
+    barWidth=500;
+    barHeight-=2;
+    interval-=5;
+    direction=1;
+    points.splice(0,points.length);
+    points.push(new Command({id: "rect", x: 250, y:basey, w:barWidth, h:barHeight, fill: "#FF0", border: "#CC0"})) 
+    console.log("start",points);
+    repaint();
+    if (tickId){
+        window.clearTimeout(tickId);
+    }
+    tickId=window.setTimeout(tick,50);
+    running=true;
+}
+
+
 const GameCanvas: React.FC<ContainerProps> = ({ id }) => {
 
     
@@ -257,28 +291,31 @@ const GameCanvas: React.FC<ContainerProps> = ({ id }) => {
         window.addEventListener("click",handleClick);
     }
 
-    const [iw,ih] = getViewport();
+    const [iw,ih,iunit,iratio] = getViewport();
     const [dimensions, setDimensions] = React.useState({ 
         height: ih,
-        width: iw
+        width: iw,
+        ratio: iratio
     })
     function handleResize() {
-        const [w,h] = getViewport();
+        const [w,h,unit,ratio] = getViewport();
         setDimensions({
             height: h,
-            width: w
+            width: w,
+            ratio: ratio
         })
         repaint();
     }
     React.useEffect(() => {
         canvas = document.getElementById(id) as HTMLCanvasElement;
         repaint();
-        tick();    
     })
     window.addEventListener('resize', function(){ clearTimeout(time); time=window.setTimeout(handleResize,500) });
-    
+    if (!running){
+        startStage();
+    }
   return (
-    <div className="canvas-container"><canvas id={id} width={dimensions.width} height={dimensions.height} className="game-canvas"></canvas></div>
+    <div className="canvas-container"><canvas id={id} width={dimensions.width} height={dimensions.height} className="game-canvas" data-ratio={dimensions.ratio} style={{width:(dimensions.width/dimensions.ratio)+"px"}} ></canvas></div>
   );
 };
 
