@@ -5,98 +5,251 @@ interface ContainerProps {
   id: string;
 }
 
-interface Command {
-    id: string,
-    x: number,
-    y: number,
-    w?: number,
-    h?: number,
-    border?: string,
-    fill?: string,
-    text?: string
+interface ICommand {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    border: string;
+    fill: string;
+    text: string;
+    start: number;
+    end: number;
 }
 
-const GameCanvas: React.FC<ContainerProps> = ({ id }) => {
-    var points : Array<Command>=[
-    ];
-    var interval=2000;
-    function add(){
-        var px=Math.random()*960+20;
-        var py=Math.random()*710+20;
-        points.push({id: "rect", x: px, y:py, w:50, h:50, fill: "#FF0"})
-        repaint();
-        setTimeout(add,interval=Math.max(750,interval-20));
+class Command implements ICommand{
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    border: string;
+    fill: string;
+    text: string;
+    start: number;
+    end: number;
 
+    constructor(options: any) {
+        this.id=options.id;
+        this.x=options.x;
+        this.y=options.y;
+        this.w=options.w;
+        this.h=options.h;
+        this.border=options.border;
+        this.fill=options.fill;
+        this.text=options.text;
+        this.start=options.start;
+        this.end=options.end;
     }
-    function repaint(){
-        var canvas= document.getElementById(id) as HTMLCanvasElement;
-        if (canvas){
-            const unit = getViewport()[2];
-            var ctx=canvas.getContext("2d");
-            if (ctx){
-                ctx.fillStyle="#000";
-                ctx.fillRect(0,0,1000*unit,750*unit);
-                for(var idx in points){
-                    var pt=points[idx];
-                    if (pt.fill){
-                        ctx.fillStyle=pt.fill;
-                    }
-                    if (pt.w && pt.h){
-                        ctx.fillRect(pt.x*unit,pt.y*unit,pt.w*unit,pt.h*unit);
-                    }
-                }
+}
+
+var line=0;
+var points : Array<Command>=[
+];
+var ui : Array<Command>=[
+];
+var time = 0;
+var direction=1;
+var barWidth=500;
+var barHeight=60;
+let score=new Command({
+    id:"rect",
+    x: 880,
+    y: 30,
+    w: 90,
+    h: 30,
+    border: "#fff",
+    text: 0
+});
+ui.push(score);
+var tickId=0;
+var canvas : HTMLCanvasElement;
+var interval = 50;
+var running = true;
+
+
+function drawItem(ctx:CanvasRenderingContext2D,item: Command, unit: number){
+    if (item.fill){
+        ctx.fillStyle=item.fill;
+    }
+    if (item.border){
+        ctx.strokeStyle =item.border;
+    }
+    var x=item.x*unit;
+    var y=item.y*unit;
+    var w=item.w?item.w*unit:0;
+    var h=item.h?item.h*unit:0;
+    var start=item.start?item.start:0;
+    var end=item.end?item.end:2*Math.PI;
+    var fh=Math.round(30*unit);
+    ctx.font=fh+"px Arial";
+
+    if (item.id==="rect" && item.fill){
+        ctx.fillRect(x,y,w,h);
+    }
+    if (item.id==="rect" && item.border && w>0){
+        ctx.strokeRect(x,y,w,h);
+    }
+    if (item.id==="ellipse" && w>0){
+        ctx.beginPath();
+        ctx.ellipse(x,y,w/2,h/2,0,start,end);
+        if (item.fill){
+            ctx.fill();
+        }
+        if (item.border){
+            ctx.stroke();
+        }
+    }
+    if (item.text){
+        ctx.textAlign = "center";
+        if (item.border){
+            ctx.fillStyle =item.border;
+        }
+        ctx.fillText(item.text,x+w/2,y+h/2+fh/3,w);
+    }
+}
+function repaint(){
+    if (canvas){
+        const unit = getViewport()[2];
+        var ctx=canvas.getContext("2d");
+        if (ctx){
+            ctx.fillStyle="#000";
+            ctx.fillRect(0,0,1000*unit,750*unit);
+            for(let idx in points){
+                let pt=points[idx];
+                drawItem(ctx, pt, unit);
+            }
+            for(let idx in ui){
+                let pt=ui[idx];
+                drawItem(ctx, pt, unit);
             }
         }
     }
-    function getViewport(){
-        var ratio=4/3;
-        var unit=1;
-        var dw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0)
-        var dh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0)
-        var w=dw;
-        var h=dh;
-        if (w/ratio>h){
-            w=h*ratio;
+}
+function getViewport(){
+    var ratio=4/3;
+    var unit=1;
+    var dw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0)
+    var dh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0)
+    var w=dw;
+    var h=dh;
+    if (w/ratio>h){
+        w=h*ratio;
+    }else{
+        h=w/ratio;
+    }
+    unit=w/1000;
+    return [w,h,unit];
+}
+
+function handleClick(ev: MouseEvent){
+    if (ev.target===canvas){
+        const unit = getViewport()[2];
+        var nx=ev.offsetX/unit;
+        var ny=ev.offsetY/unit;
+        clickCanvas(nx,ny);
+    }
+}
+function handleTouch(ev: TouchEvent){
+    if (ev.target===canvas){
+        const unit = getViewport()[2];
+        var element  = ev.target as HTMLElement;
+        var rect=element.getBoundingClientRect();
+        console.log(ev.touches[0],rect);
+        var nx=(ev.touches[0].pageX-rect.left)/unit;
+        var ny=(ev.touches[0].pageY-rect.top)/unit;
+        clickCanvas(nx,ny);
+    }
+}
+
+function  clickCanvas(nx:number,ny: number){
+    console.log(points);
+    if (line>0 && running){
+        var bar =points[line]; 
+        var bar0 = points[line-1];
+        var bw = (bar.w?bar.w:0);
+        if (line>1){
+            if (bar0){
+                const newX0=Math.max(bar.x,points[line-1].x);
+                const newX1=Math.min(bar.x+bw,points[line-1].x+(bar0.w?bar0.w:0));
+                const newWidth=Math.max(0,newX1-newX0);
+                console.log("new",newX0,newX1,newWidth);
+                bar.x=newX0;
+                bar.w=newWidth;   
+                bar.text=""+newWidth;
+                score.text+=newWidth; 
+            }
         }else{
-            h=w/ratio;
-        }
-        unit=w/1000;
-        return [w,h,unit];
-    }
-    function  checkPoints(nx:number,ny: number){
-        for(var idx=points.length-1; idx>=0; idx--){
-            var pt = points[idx];
-            if (pt.w && pt.h){
-                var r=Math.sqrt((pt.x+pt.w/2-nx)*(pt.x+pt.w/2-nx)+(pt.y+pt.h/2-ny)*(pt.y+pt.h/2-ny));
-                //console.log(idx,r);
-                if (r<pt.w){
-                    points.splice(idx,1);
-                }
-
+            if (bar){
+                const newX0=Math.max(bar.x,0);
+                const newX1=Math.min(bar.x+bw,1000);
+                const newWidth=Math.max(0,newX1-newX0);
+                bar.x=newX0;
+                bar.w=newWidth;   
+                bar.text=""+newWidth; 
+                score.text+=newWidth;
             }
         }
-        points.push({id: "rect", x: nx-4, y:ny-4, w:8, h:8, fill: "#F0F"});
-        repaint();
+        console.log(points[line].x);
     }
-    function handleClick(ev: MouseEvent){
-        if (ev.target===document.getElementById(id)){
-            const unit = getViewport()[2];
-            var nx=ev.offsetX/unit;
-            var ny=ev.offsetY/unit;
-            checkPoints(nx,ny);
+    repaint();
+    if (running){
+        line++;
+    }
+}
+
+
+function tick(){
+    if (line>=points.length){
+        var prev=points[line-1];
+        var pw=barWidth;
+        var py=line*barHeight;
+        if (prev){
+            pw=prev.w;
+            if (pw<2){
+                running = false;
+                return;
+            }
+            if ((750-py)<barHeight){
+                setTimeout(function(){
+                    points.splice(0,points.length);
+                    line=0;
+                    barWidth=500;
+                    barHeight-=1;
+                    interval-=5;
+                    direction=1;
+                    repaint();
+                    if (tickId){
+                        window.clearTimeout(tickId);
+                    }
+                    tickId=window.setTimeout(tick,50);
+                },3000);
+                return;
+            }
+        }
+        var px=-direction*pw;
+        points.push(new Command({id: "rect", x: px, y:750-py, w:pw, h:barHeight, fill: "#FF0", border: "#F00"}))    
+    }else if(line>=0){
+        points[line].x+=direction*10;
+        if (points[line].x+points[line].w>1000){
+            direction=-1;
+        }
+        if (points[line].x<0){
+            direction=1;
         }
     }
-    function handleTouch(ev: TouchEvent){
-        if (ev.target===document.getElementById(id)){
-            const unit = getViewport()[2];
-            var element  = ev.target as HTMLElement;
-            var rect=element.getBoundingClientRect();
-            console.log(ev.touches[0],rect);
-            var nx=(ev.touches[0].pageX-rect.x)/unit;
-            var ny=(ev.touches[0].pageY-rect.y)/unit;
-            checkPoints(nx,ny);
-        }
+    repaint();
+    if (tickId){
+        window.clearTimeout(tickId);
     }
+    tickId=window.setTimeout(tick,interval);
+}    
+
+
+const GameCanvas: React.FC<ContainerProps> = ({ id }) => {
+
+    
     var isTouch = 'ontouchstart' in window || navigator.msMaxTouchPoints;
     if (isTouch){
         window.addEventListener("touchstart",handleTouch);
@@ -117,13 +270,13 @@ const GameCanvas: React.FC<ContainerProps> = ({ id }) => {
         })
         repaint();
     }
-    React.useEffect(() => { 
-
+    React.useEffect(() => {
+        canvas = document.getElementById(id) as HTMLCanvasElement;
         repaint();
+        tick();    
     })
-    var time = 0;
     window.addEventListener('resize', function(){ clearTimeout(time); time=window.setTimeout(handleResize,500) });
-    add();    
+    
   return (
     <div className="canvas-container"><canvas id={id} width={dimensions.width} height={dimensions.height} className="game-canvas"></canvas></div>
   );
