@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@capacitor/core": "2.4.0",
+    "@capacitor/ios": "^2.4.0",
     "@ionic/react": "^5.0.7",
     "@ionic/react-router": "^5.0.7",
     "@testing-library/jest-dom": "^4.2.4",
@@ -27,7 +28,10 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "electron:mac": "electron-packager ./electron ExampleApp --overwrite --platform=darwin --arch=x64 --prune=true --out=release-builds && npm run electron:mac-icon",
+    "electron:mac-icon": "./makeicns.sh public/assets/icon/icon.png ExampleApp",
+    "electron:win": "./makeicon.sh public/assets/icon/icon.png ExampleApp && electron-packager ./electron ExampleApp --overwrite --asar=true --platform=win32 --arch=ia32 --prune=true --out=release-builds --version-string.CompanyName=CE --version-string.FileDescription=CE --icon=ExampleApp.ico --version-string.ProductName='Example App'"
   },
   "eslintConfig": {
     "extends": "react-app"
@@ -47,5 +51,6 @@
   "devDependencies": {
     "@capacitor/cli": "2.4.0"
   },
-  "description": "An Ionic project"
+  "description": "An Ionic project",
+  "homepage" : "./"
 }
